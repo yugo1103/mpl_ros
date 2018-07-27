@@ -1,0 +1,50 @@
+<launch>
+  <arg name="debug" default="false"/>
+  <!--<arg name="debug_valgrind" default="false"/>-->
+
+  <arg name="prefix" value="" unless="$(arg debug)"/>
+  <arg name="prefix" value="gdb -ex run --args" if="$(arg debug)"/>
+
+  <node pkg="mpl_planner"
+    type="mpl_planner_node"
+    name="test_primitive"
+    launch-prefix="$(arg prefix)"
+    output="screen">
+    <param name="file" value="$(find mpl_test_node)/maps/simple/simple.bag"/>
+    <param name="topic" value="/voxel_map"/>
+    <!-- Set start and goal -->
+    <!-- Set dynamic constraints -->
+    <param name="robot_radius" value="0.4"/>
+    <param name="voxel_resolution" value="0.2"/>
+    <param name="voxel_range_x" value="20.0"/>
+    <param name="voxel_range_y" value="20.0"/>
+    <param name="voxel_range_z" value="5.0"/>
+    <param name="vel_max" value="1.5"/>
+    <param name="acc_max" value="1.0"/>
+    <param name="jrk_max" value="-1.0"/>
+    <param name="yaw_max" value="0.5"/>
+    <param name="primitive_u" value="0.5"/>
+    <param name="primitive_u_yaw" value="0.5"/>
+    <param name="primitive_u_num" value="1"/>
+    <param name="dt" value="1.0"/>
+    <param name="ndt" value="10"/>
+    <param name="use_3d" value="true"/>
+    <param name="use_yaw" value="false"/>
+    <param name="planner_verbose" value="true"/>
+    <param name="number_of_points" value="100"/>
+    <param name="goal_tolerance" value="0.5"/>
+   <remap from="/test_primitive/cloud" to="/octomap_point_cloud_centers"/>
+  <remap from="/test_primitive/odometry" to="/firefly/ground_truth/odometry"/>
+  <remap from="/test_primitive/goal_pose" to="/firefly/command_pose"/>
+  </node>
+
+  <!-- <node pkg="planning_ros_utils"                                                                      -->
+  <!--   name="trajectory_extractor"                                                                       -->
+  <!--   type="trajectory_extractor_node"                                                                  -->
+  <!--   output="screen">                                                                                  -->
+  <!--   <remap from="~trajectory" to="test_primitive/trajectory_refined"/>                                -->
+  <!--   <param name="file" value="$(find mpl_test_node)/launch/map_planner_node/trajectory_command.bag"/> -->
+  <!--   <param name="topic" value="command"/>                                                             -->
+  <!-- </node>                                                                                             -->
+
+</launch>
