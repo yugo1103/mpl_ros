@@ -29,5 +29,5 @@ public:
 }  // namespace chomp_planner_nodelet
 
 #include <pluginlib/class_list_macros.h>
-PLUGINLIB_EXPORT_CLASS(mpl_planner_node::MPLPlannerNodelet, nodelet::Nodelet)
+PLUGINLIB_EXPORT_CLASS(mpl_planner_nodelet::MPLPlannerNodelet, nodelet::Nodelet)
 

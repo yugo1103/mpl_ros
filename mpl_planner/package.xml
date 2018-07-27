@@ -18,5 +18,10 @@
   <depend>trajectory_msgs</depend>
   <depend>planning_ros_msgs</depend>
   <depend>planning_ros_utils</depend>
+  <depend>nodelet</depend>
+
+  <export>
+    <nodelet plugin="${prefix}/nodelet_plugins.xml" />
+  </export>
 
 </package>

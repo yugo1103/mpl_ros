@@ -18,6 +18,10 @@ cs_add_executable(mpl_planner_node
 )
 target_link_libraries(mpl_planner_node ${MOTION_PRIMITIVE_LIBRARY_LIBRARIES})
 
+add_library(mpl_planner_nodelet SHARED
+  src/MPLPlannerNode.cpp
+  src/mpl_planner_nodelet.cc)
+
 cs_install()
 
 cs_export()
