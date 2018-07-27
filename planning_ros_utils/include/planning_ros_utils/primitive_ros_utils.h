@@ -7,6 +7,8 @@
 #include <mpl_basis/trajectory.h>
 #include <planning_ros_msgs/PrimitiveArray.h>
 #include <planning_ros_msgs/Trajectory.h>
+#include <trajectory_msgs/MultiDOFJointTrajectory.h>
+#include <trajectory_msgs/MultiDOFJointTrajectoryPoint.h>
 
 /// Primitive2D to primitive ROS message
 inline planning_ros_msgs::Primitive toPrimitiveROSMsg(const Primitive2D &pr,
@@ -213,6 +215,39 @@ inline Trajectory3D toTrajectory3D(const planning_ros_msgs::Trajectory &traj_msg
   } else
     traj.total_t_ = traj.taus.back();
   return traj;
+}
+
+inline trajectory_msgs::MultiDOFJointTrajectory toMultiDOFJointTrajectoryMsg(const Trajectory3D &traj, const int n) {
+    auto points = traj.sample(n);
+    trajectory_msgs::MultiDOFJointTrajectory msg;
+    for(auto p : points) {
+      trajectory_msgs::MultiDOFJointTrajectoryPoint tp;
+      geometry_msgs::Transform transform;
+      transform.translation.x = p.pos(0);
+      transform.translation.y = p.pos(1);
+      transform.translation.z = p.pos(2);
+      Eigen::Quaterniond q = Eigen::AngleAxisd(0, Vec3f::UnitX())
+        * Eigen::AngleAxisd(0, Vec3f::UnitY())
+        * Eigen::AngleAxisd(p.yaw, Vec3f::UnitZ());
+      transform.rotation.x = q.x();
+      transform.rotation.y = q.y();
+      transform.rotation.z = q.z();
+      transform.rotation.w = q.w();
+      tp.transforms.push_back(transform);
+      geometry_msgs::Twist velocity;
+      velocity.linear.x = p.vel(0);
+      velocity.linear.y = p.vel(1);
+      velocity.linear.z = p.vel(2);
+      tp.velocities.push_back(velocity);
+      geometry_msgs::Twist acceleration;
+      acceleration.linear.x = p.acc(0);
+      acceleration.linear.y = p.acc(1);
+      acceleration.linear.z = p.acc(2);
+      tp.accelerations.push_back(acceleration);
+      tp.time_from_start = ros::Duration(p.t);
+      msg.points.push_back(tp);
+    }
+    return msg;
 }
 
 #endif

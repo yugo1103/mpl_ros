@@ -55,9 +55,6 @@ MPLPlannerNode::~MPLPlannerNode()
 
 bool MPLPlannerNode::readParameters()
 {
-  // if (!privateNodeHandle_.param<std::string>("base_frame_id", baseFrameId_, "body")) {
-  //   ROS_ERROR("Could not load base frame id.");
-  // }
   if (!privateNodeHandle_.param<bool>("planner_verbose", plannerVerbose_, true)) {
     ROS_ERROR("Could not load planner_verbose.");
   }
@@ -79,9 +76,6 @@ bool MPLPlannerNode::readParameters()
   if (!privateNodeHandle_.param<double>("voxel_resolution", voxelResolution_, 0.2)) {
     ROS_ERROR("Could not load voxel resolution.");
   }
-  // if (!privateNodeHandle_.param<double>("velocity", velocity_, 1.0)) {
-  //   ROS_ERROR("Could not load velocity.");
-  // }
   if (!privateNodeHandle_.param<bool>("use_3d", use3d_, true)) {
     ROS_ERROR("Could not load use_3d.");
   }
@@ -210,8 +204,8 @@ void MPLPlannerNode::cloudCallback(const topic_tools::ShapeShifter::ConstPtr &ms
 }
 
 void MPLPlannerNode::setMap(const planning_ros_msgs::VoxelMap& msg) {
-  Vec3f ori(msg.origin.x, msg.origin.y, msg.origin.z);
-  // Vec3f ori = startPosition_;
+  // Vec3f ori(msg.origin.x, msg.origin.y, msg.origin.z);
+  Vec3f ori = startPosition_ - Vec3f(voxelRangeX_, voxelRangeY_, voxelRangeZ_) / 2;
   Vec3i dim(msg.dim.x, msg.dim.y, msg.dim.z);
   decimal_t res = msg.resolution;
   std::vector<signed char> map = msg.data;
@@ -282,11 +276,6 @@ void MPLPlannerNode::odometryCallback(const nav_msgs::Odometry& msg) {
 
 void MPLPlannerNode::planTrajectory()
 {
-  ROS_INFO("plan trajectory");
-  ROS_INFO_STREAM("startPosition_ = " << startPosition_.x() << " , " << startPosition_.y()
-           << ", " << startPosition_.z());
-  ROS_INFO_STREAM("goalPosition_ = " << goalPosition_.x() << " , " << goalPosition_.y()
-           << ", " << goalPosition_.z());
   double diff = (goalPosition_ - startPosition_).norm();
   if(diff < goalTolerance_) 
   {
@@ -297,19 +286,8 @@ void MPLPlannerNode::planTrajectory()
     transform.translation.x = goalPosition_.x();
     transform.translation.y = goalPosition_.y();
     transform.translation.z = goalPosition_.z();
-      // Eigen::Quaterniond q = AngleAxisd(0, Vector3d::UnitX())
-      //   * AngleAxisd(0, Vector3d::UnitY())
-      //   * AngleAxisd(goalYaw_, Vector3d::UnitZ());
-      // if (fabs(dyaw) > 0.001)
-      //   yaw += dyaw;
-      // transform.rotation.x = q.x();
-      // transform.rotation.y = q.y();
-      // transform.rotation.z = q.z();
-      // transform.rotation.w = q.w();
       tp.transforms.push_back(transform);
-      // tp.time_from_start = ros::Duration(dt * i);
       commandTrajectory.points.push_back(tp);
-
       commandTrajectoryPublisher_.publish(commandTrajectory);
       return;
   }
@@ -366,7 +344,7 @@ void MPLPlannerNode::planTrajectory()
     auto dts = traj.getSegmentTimes();
 
     // Generate higher order polynomials
-    // TrajSolver3D traj_solver(Control::ACC);
+    // TrajSolver3D traj_solver(Control::JRK);
     TrajSolver3D traj_solver(Control::ACC);
     traj_solver.setWaypoints(waypoints);
     traj_solver.setDts(dts);
@@ -374,7 +352,6 @@ void MPLPlannerNode::planTrajectory()
 
     // Publish refined trajectory
     planning_ros_msgs::Trajectory refined_traj_msg = toTrajectoryROSMsg(traj);
-    // refined_traj_msg.header = header;
     refined_traj_msg.header.frame_id = "world";
     refinedTrajectoryPublisher.publish(refined_traj_msg);
 
@@ -383,43 +360,9 @@ void MPLPlannerNode::planTrajectory()
            traj.J(Control::SNP), traj.Jyaw(), traj.getTotalTime());
     auto refined_points = traj.sample(numberOfPoints_);
     trajectory_msgs::MultiDOFJointTrajectory commandTrajectory;
+    commandTrajectory = toMultiDOFJointTrajectoryMsg(traj, numberOfPoints_);
     commandTrajectory.header.frame_id = "world";
-    int i = 0;
-    double dt = traj.getTotalTime() / numberOfPoints_;
-    for(auto p : refined_points) {
-      ROS_INFO_STREAM("p = " << p.pos << ", " << p.vel << ", " << p.acc); 
-      trajectory_msgs::MultiDOFJointTrajectoryPoint tp;
-      geometry_msgs::Transform transform;
-      transform.translation.x = p.pos(0);
-      transform.translation.y = p.pos(1);
-      transform.translation.z = p.pos(2);
-      // Eigen::Quaterniond q = AngleAxisd(0, Vector3d::UnitX())
-      //   * AngleAxisd(0, Vector3d::UnitY())
-      //   * AngleAxisd(goalYaw_, Vector3d::UnitZ());
-      // if (fabs(dyaw) > 0.001)
-      //   yaw += dyaw;
-      // transform.rotation.x = q.x();
-      // transform.rotation.y = q.y();
-      // transform.rotation.z = q.z();
-      // transform.rotation.w = q.w();
-      tp.transforms.push_back(transform);
-      geometry_msgs::Twist velocity;
-      velocity.linear.x = p.vel(0);
-      velocity.linear.y = p.vel(1);
-      velocity.linear.z = p.vel(2);
-      tp.velocities.push_back(velocity);
-      geometry_msgs::Twist acceleration;
-      acceleration.linear.x = p.acc(0);
-      acceleration.linear.y = p.acc(1);
-      acceleration.linear.z = p.acc(2);
-      tp.accelerations.push_back(acceleration);
-      tp.time_from_start = ros::Duration(dt * i);
-      commandTrajectory.points.push_back(tp);
-      i++;
-
-    }
     commandTrajectoryPublisher_.publish(commandTrajectory);
-
   }
 
   // Publish expanded nodes
@@ -431,8 +374,6 @@ void MPLPlannerNode::planTrajectory()
 
 void MPLPlannerNode::goalPoseCallback(const geometry_msgs::PoseStamped& message)
 {
-  // ROS_INFO("========================================================");
-  // ROS_INFO("Chomp planner received new goal pose.");
   goalPosition_.x() = message.pose.position.x;
   goalPosition_.y() = message.pose.position.y;
   goalPosition_.z() = message.pose.position.z;
@@ -448,103 +389,7 @@ void MPLPlannerNode::goalPoseCallback(const geometry_msgs::PoseStamped& message)
       commandPosePublisher_.publish(message);
     }
   }
-  ROS_INFO_STREAM("goalPosition = " << goalPosition_);
   planTrajectory();
-  // ROS_INFO_STREAM("goalyaw = " << goalYaw_);
 }
-//
-// void MPLPlannerNode::publishCommandTrajectory(const std::vector<Eigen::Vector4d>& trajectory)
-// {
-//   trajectory_msgs::MultiDOFJointTrajectory trajectoryMsg;
-//   int i = 0;
-//   double dt = 0.5;
-//   if (trajectory.size() > 0) {
-//     double t = trajectory.back()[3] - trajectory.front()[3];
-//     dt = t / trajectory.size();
-//   }
-//   else {
-//     return;
-//   }
-//   std::cout << "dt = " << dt << std::endl;
-//   double deltayaw = goalYaw_ - currentYaw_;
-//   if (deltayaw > M_PI)
-//     deltayaw -= 2 * M_PI;
-//   if (deltayaw < -M_PI)
-//     deltayaw += 2 * M_PI;
-//
-//   double dyaw = (goalYaw_ - currentYaw_) / trajectory.size();
-//   std::cout << "dyaw = " << dyaw << std::endl;
-//   double yaw = currentYaw_;
-//
-//   Eigen::Vector4d prevPoint = trajectory[0];
-//   for (Eigen::Vector4d point : trajectory){
-//     trajectory_msgs::MultiDOFJointTrajectoryPoint p;
-//     geometry_msgs::Transform transform;
-//     transform.translation.x = point.x();
-//     transform.translation.y = point.y();
-//     transform.translation.z = point.z();
-//     Eigen::Quaterniond q = AngleAxisd(0, Vector3d::UnitX())
-//       * AngleAxisd(0, Vector3d::UnitY())
-//       * AngleAxisd(goalYaw_, Vector3d::UnitZ());
-//     if (fabs(dyaw) > 0.001)
-//       yaw += dyaw;
-//     transform.rotation.x = q.x();
-//     transform.rotation.y = q.y();
-//     transform.rotation.z = q.z();
-//     transform.rotation.w = q.w();
-//     p.transforms.push_back(transform);
-//     p.time_from_start = ros::Duration(point[3]);
-//     // Eigen::Vector3d velocity = ((point - prevPoint) / dt).head(3);
-//     // geometry_msgs::Twist twist;
-//     // twist.linear.x = velocity.x();
-//     // twist.linear.y = velocity.y();
-//     // twist.linear.z = velocity.z();
-//     // p.velocities.push_back(twist);
-//     trajectoryMsg.points.push_back(p);
-//     prevPoint = point;
-//     i++;
-//   }
-//   commandTrajectoryPublisher_.publish(trajectoryMsg);
-// }
-
-// void MPLPlannerNode::publishLine(const std::vector<Eigen::Vector4d>& trajectory)
-// {
-//     uint32_t shape = visualization_msgs::Marker::LINE_STRIP;
-//
-//     visualization_msgs::Marker marker;
-//     marker.header.frame_id = "/world";
-//     marker.header.stamp = ros::Time::now();
-//
-//     marker.ns = "basic_shapes";
-//     marker.id = 0;
-//     marker.type = shape;
-//     marker.action = visualization_msgs::Marker::ADD;
-//     for (Eigen::Vector4d point : trajectory){
-//       geometry_msgs::Point p;
-//       p.x = point.x();
-//       p.y = point.y();
-//       p.z = point.z();
-//       marker.points.push_back(p);
-//     }
-//     // Set the color -- be sure to set alpha to something non-zero!
-//     marker.pose.orientation.x = 0.0;
-//     marker.pose.orientation.y = 0.0;
-//     marker.pose.orientation.z = 0.0;
-//     marker.pose.orientation.w = 1.0;
-//     // Set the scale of the marker_goal -- 1x1x1 here means 1m on a side
-//     marker.scale.x = 0.05;
-//     marker.scale.y = 0.05;
-//     marker.scale.z = 0.05;
-//     marker.color.r = 0.0f;
-//     marker.color.g = 0.0f;
-//     marker.color.b = 1.0f;
-//     marker.color.a = 1.0;
-//     marker.lifetime = ros::Duration();
-//     trajectoryPublisher_.publish(marker);
-//     return;
-// }
-
-//
-//
 //
 } /* namespace */

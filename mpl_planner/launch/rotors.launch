@@ -16,8 +16,8 @@
     <!-- Set dynamic constraints -->
     <param name="robot_radius" value="0.4"/>
     <param name="voxel_resolution" value="0.2"/>
-    <param name="voxel_range_x" value="20.0"/>
-    <param name="voxel_range_y" value="20.0"/>
+    <param name="voxel_range_x" value="10.0"/>
+    <param name="voxel_range_y" value="10.0"/>
     <param name="voxel_range_z" value="5.0"/>
     <param name="vel_max" value="1.5"/>
     <param name="acc_max" value="1.0"/>
