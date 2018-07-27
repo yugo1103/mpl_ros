@@ -1,33 +1,33 @@
-#include "chomp_planner/ChompPlannerNode.hpp"
+#include "mpl_planner/MPLPlannerNode.hpp"
 #include <nodelet/nodelet.h>
 
-namespace chomp_planner_nodelet {
+namespace mpl_planner_nodelet {
 
-class ChompPlannerNodelet : public nodelet::Nodelet
+class MPLPlannerNodelet : public nodelet::Nodelet
 {
 private:
-  chomp_planner::ChompPlannerNode *chompPlannerNode;
+  mpl_planner::MPLPlannerNode *mplPlannerNode;
 
 public:
-  ChompPlannerNodelet() : Nodelet(), chompPlannerNode(NULL)
+  MPLPlannerNodelet() : Nodelet(), mplPlannerNode(NULL)
   {
   }
 
-  ~ChompPlannerNodelet()
+  ~MPLPlannerNodelet()
   {
-    if(chompPlannerNode)
+    if(mplPlannerNode)
     {
-      delete chompPlannerNode;
+      delete mplPlannerNode;
     }
   }
 
   virtual void onInit()
   {
-    chompPlannerNode = new chomp_planner::ChompPlannerNode(getNodeHandle(), getPrivateNodeHandle());
+    mplPlannerNode = new mpl_planner::MPLPlannerNode(getNodeHandle(), getPrivateNodeHandle());
   }
 };
 }  // namespace chomp_planner_nodelet
 
 #include <pluginlib/class_list_macros.h>
-PLUGINLIB_EXPORT_CLASS(chomp_planner_nodelet::ChompPlannerNodelet, nodelet::Nodelet)
+PLUGINLIB_EXPORT_CLASS(mpl_planner_node::MPLPlannerNodelet, nodelet::Nodelet)
 

@@ -3,7 +3,7 @@
  *
  *  Created on: Jul 24, 2018
  *      Author: Takahiro Miki
- *	 Institute: Univ of Tokyo AILab, HongoAerospace.inc
+ *	 Institute: Univ of Tokyo AILab
  */
 
 #include <ros/ros.h>
