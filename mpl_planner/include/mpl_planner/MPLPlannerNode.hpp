@@ -53,6 +53,7 @@ class MPLPlannerNode
   void odometryCallback(const nav_msgs::Odometry& message);
   void cloudCallback(const topic_tools::ShapeShifter::ConstPtr &msg);
 
+  void replanTrajectory(Trajectory<3> traj);
   // void esdfMapCallback(const voxblox_msgs::LayerConstPtr layerMsg);
   void planTrajectory();
 
@@ -87,6 +88,7 @@ class MPLPlannerNode
   double dt_;
   int ndt_;
   double goalTolerance_;
+  int replanning_span_;
   int numberOfPoints_;
 
   //! ROS node handle.

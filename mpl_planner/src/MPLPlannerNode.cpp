@@ -61,6 +61,9 @@ bool MPLPlannerNode::readParameters()
   if (!privateNodeHandle_.param<int>("number_of_points", numberOfPoints_, 100)) {
     ROS_ERROR("Could not load number of points.");
   }
+  if (!privateNodeHandle_.param<int>("replanning_span", replanning_span_, 5)) {
+    ROS_ERROR("Could not load replanning span.");
+  }
   if (!privateNodeHandle_.param<double>("robot_radius", robotRadius_, 0.3)) {
     ROS_ERROR("Could not load robot radius.");
   }
@@ -274,6 +277,104 @@ void MPLPlannerNode::odometryCallback(const nav_msgs::Odometry& msg) {
   // ROS_INFO_STREAM("got odometry" << msg);
 }
 
+void MPLPlannerNode::replanTrajectory(Trajectory<3> traj){
+	auto replan_points=traj.getWaypoints();
+	for (int replan_points_num = replanning_span_; replan_points_num < replan_points.size(); replan_points_num++){
+		if (replan_points_num%replanning_span_ == 0){
+			Waypoint3D start;
+  			start.pos = startPosition_;
+  			start.vel = startVelocity_;
+  			start.acc = Vec3f(0, 0, 0);
+ 			start.jrk = Vec3f(0, 0, 0);
+  			start.yaw = currentYaw_;
+  			start.use_pos = true;
+  			start.use_vel = true;
+  			start.use_acc = false;
+  			start.use_jrk = false;
+  			start.use_yaw = useYaw_; // if true, yaw is also propogated
+
+  			Waypoint3D goal(start.control);
+  			goal.pos = replan_points[replan_points_num].pos;
+  			goal.vel = replan_points[replan_points_num].vel;
+  			goal.acc = replan_points[replan_points_num].acc;
+  			goal.jrk = replan_points[replan_points_num].jrk;
+			goal.use_pos = true;
+  			goal.use_vel = true;
+  			goal.use_acc = true;
+  			goal.use_jrk = true;
+  			goal.use_yaw = useYaw_;
+
+  			// Planning thread!
+  			ros::Time t0 = ros::Time::now();
+  			bool valid = plannerPtr_->plan(start, goal);
+
+			if (!valid) {
+				ROS_WARN("Failed! Takes %f sec for planning, expand [%zu] nodes",
+				         (ros::Time::now() - t0).toSec(),
+				         plannerPtr_->getCloseSet().size());
+			} else {
+				ROS_INFO("Succeed! Takes %f sec for planning, expand [%zu] nodes",
+				         (ros::Time::now() - t0).toSec(),
+				         plannerPtr_->getCloseSet().size());
+
+				auto replan_traj = plannerPtr_->getTraj();
+
+				// Publish replan_trajectory
+				std_msgs::Header header;
+				header.frame_id = std::string("map");
+				planning_ros_msgs::Trajectory replan_traj_msg = toTrajectoryROSMsg(replan_traj);
+				// replan_traj_msg.header = header;
+				// replan_traj_pub.publish(traj_msg);
+
+				printf("Raw traj -- J(VEL): %f, J(ACC): %f, J(JRK): %f, J(SNP): %f, J(YAW): %f, total time: %f\n",
+				       replan_traj.J(Control::VEL), replan_traj.J(Control::ACC), replan_traj.J(Control::JRK),
+				       replan_traj.J(Control::SNP), replan_traj.Jyaw(), replan_traj.getTotalTime());
+
+				// Get intermediate waypoints
+				auto waypoints = replan_traj.getWaypoints();
+				for(int i = 1; i < waypoints.size() - 1; i++)
+				  waypoints[i].control = Control::VEL;
+				// Get time allocation
+				auto dts = replan_traj.getSegmentTimes();
+
+				// Generate higher order polynomials
+				// TrajSolver3D traj_solver(Control::JRK);
+				TrajSolver3D replan_traj_solver(Control::ACC);
+				replan_traj_solver.setWaypoints(waypoints);
+				replan_traj_solver.setDts(dts);
+				replan_traj = replan_traj_solver.solve();
+
+				// Publish refined trajectory
+				planning_ros_msgs::Trajectory refined_replan_traj_msg = toTrajectoryROSMsg(replan_traj);
+				refined_replan_traj_msg.header.frame_id = "world";
+				refinedTrajectoryPublisher.publish(refined_replan_traj_msg);
+
+				printf("Refined traj -- J(VEL): %f, J(ACC): %f, J(JRK): %f, J(SNP): %f, J(YAW): %f, total time: %f\n",
+				       replan_traj.J(Control::VEL), replan_traj.J(Control::ACC), replan_traj.J(Control::JRK),
+				       replan_traj.J(Control::SNP), replan_traj.Jyaw(), replan_traj.getTotalTime());
+				auto refined_points = replan_traj.sample(numberOfPoints_);
+	   		 	trajectory_msgs::MultiDOFJointTrajectory commandTrajectory;
+	    		commandTrajectory = toMultiDOFJointTrajectoryMsg(traj, numberOfPoints_);
+	    		commandTrajectory.header.frame_id = "world";
+	    		commandTrajectoryPublisher_.publish(commandTrajectory);
+	    	}
+		}
+
+	}
+	trajectory_msgs::MultiDOFJointTrajectory commandTrajectory;
+    commandTrajectory.header.frame_id = "world";
+    trajectory_msgs::MultiDOFJointTrajectoryPoint tp;
+    geometry_msgs::Transform transform;
+    transform.translation.x = goalPosition_.x();
+    transform.translation.y = goalPosition_.y();
+    transform.translation.z = goalPosition_.z();
+    tp.transforms.push_back(transform);
+    commandTrajectory.points.push_back(tp);
+    commandTrajectoryPublisher_.publish(commandTrajectory);
+    return;
+
+}
+
 void MPLPlannerNode::planTrajectory()
 {
   double diff = (goalPosition_ - startPosition_).norm();
@@ -286,10 +387,10 @@ void MPLPlannerNode::planTrajectory()
     transform.translation.x = goalPosition_.x();
     transform.translation.y = goalPosition_.y();
     transform.translation.z = goalPosition_.z();
-      tp.transforms.push_back(transform);
-      commandTrajectory.points.push_back(tp);
-      commandTrajectoryPublisher_.publish(commandTrajectory);
-      return;
+    tp.transforms.push_back(transform);
+    commandTrajectory.points.push_back(tp);
+    commandTrajectoryPublisher_.publish(commandTrajectory);
+    return;
   }
   // Vec3f is Vector3d
   Waypoint3D start;
@@ -351,18 +452,17 @@ void MPLPlannerNode::planTrajectory()
     traj = traj_solver.solve();
 
     // Publish refined trajectory
+    /*
     planning_ros_msgs::Trajectory refined_traj_msg = toTrajectoryROSMsg(traj);
     refined_traj_msg.header.frame_id = "world";
     refinedTrajectoryPublisher.publish(refined_traj_msg);
+    */
 
     printf("Refined traj -- J(VEL): %f, J(ACC): %f, J(JRK): %f, J(SNP): %f, J(YAW): %f, total time: %f\n",
            traj.J(Control::VEL), traj.J(Control::ACC), traj.J(Control::JRK),
            traj.J(Control::SNP), traj.Jyaw(), traj.getTotalTime());
-    auto refined_points = traj.sample(numberOfPoints_);
-    trajectory_msgs::MultiDOFJointTrajectory commandTrajectory;
-    commandTrajectory = toMultiDOFJointTrajectoryMsg(traj, numberOfPoints_);
-    commandTrajectory.header.frame_id = "world";
-    commandTrajectoryPublisher_.publish(commandTrajectory);
+
+    replanTrajectory(traj);
   }
 
   // Publish expanded nodes
