@@ -53,9 +53,10 @@ class MPLPlannerNode
   void odometryCallback(const nav_msgs::Odometry& message);
   void cloudCallback(const topic_tools::ShapeShifter::ConstPtr &msg);
 
-  void replanTrajectory(Trajectory<3> traj);
   // void esdfMapCallback(const voxblox_msgs::LayerConstPtr layerMsg);
   void planTrajectory();
+
+  void timerCallback(const ros::TimerEvent&);
 
   // Planning variables
   std::shared_ptr<MPL::VoxelMapUtil> mapUtilPtr_;
@@ -108,6 +109,9 @@ class MPLPlannerNode
   ros::Publisher voxelMapPublisher_;
   ros::Publisher refinedTrajectoryPublisher;
   ros::Publisher markerPublisher_;
+
+  ros::Timer timer_;
+
 };
 
 } /* namespace */
