@@ -1,7 +1,7 @@
 #include <ros/ros.h>
 #include <planning_ros_utils/data_ros_utils.h>
-#include <planning_ros_utils/voxel_grid.h>
 #include <topic_tools/shape_shifter.h>
+#include <planning_ros_utils/voxel_grid.h>
 #include <sensor_msgs/point_cloud_conversion.h>
 
 std::unique_ptr<VoxelGrid> voxel_grid_;

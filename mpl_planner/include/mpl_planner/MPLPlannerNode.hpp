@@ -56,7 +56,8 @@ class MPLPlannerNode
   // void esdfMapCallback(const voxblox_msgs::LayerConstPtr layerMsg);
   void planTrajectory();
 
-  void timerCallback(const ros::TimerEvent&);
+  void timerCallback1(const ros::TimerEvent&);
+  void timerCallback2(const ros::TimerEvent&);
 
   // Planning variables
   std::shared_ptr<MPL::VoxelMapUtil> mapUtilPtr_;
@@ -110,7 +111,8 @@ class MPLPlannerNode
   ros::Publisher refinedTrajectoryPublisher;
   ros::Publisher markerPublisher_;
 
-  ros::Timer timer_;
+  ros::Timer timer1_;
+  ros::Timer timer2_;
 
 };
 

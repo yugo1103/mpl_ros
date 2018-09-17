@@ -16,10 +16,10 @@
     <!-- Set dynamic constraints -->
     <param name="robot_radius" value="0.4"/>
     <param name="voxel_resolution" value="0.2"/>
-    <param name="voxel_range_x" value="10.0"/>
-    <param name="voxel_range_y" value="10.0"/>
+    <param name="voxel_range_x" value="15.0"/>
+    <param name="voxel_range_y" value="15.0"/>
     <param name="voxel_range_z" value="5.0"/>
-    <param name="vel_max" value="1.5"/>
+    <param name="vel_max" value="1.0"/>
     <param name="acc_max" value="1.0"/>
     <param name="jrk_max" value="-1.0"/>
     <param name="yaw_max" value="0.5"/>
@@ -31,13 +31,14 @@
     <param name="use_3d" value="true"/>
     <param name="use_yaw" value="false"/>
     <param name="planner_verbose" value="true"/>
-    <param name="number_of_points" value="100"/>
+    <param name="number_of_points" value="300"/>
+    <param name="replanning_span" value="5"/>
     <param name="goal_tolerance" value="0.5"/>
-   <remap from="/test_primitive/cloud" to="/octomap_point_cloud_centers"/>
-  <!-- <remap from="/test_primitive/odometry" to="/firefly/ground_truth/odometry"/> -->
-  <remap from="/test_primitive/odometry" to="/taro/odometry"/>
-  <!-- <remap from="/test_primitive/goal_pose" to="/firefly/command_pose"/> -->
-  <remap from="/test_primitive/goal_pose" to="/taro/command/pose"/>
+  <remap from="/test_primitive/cloud" to="/octomap_point_cloud_centers"/> 
+  <remap from="/test_primitive/odometry" to="/firefly/ground_truth/odometry"/> 
+  <!-- <remap from="/test_primitive/odometry" to="/msf_core/odometry"/> -->
+  <remap from="/test_primitive/goal_pose" to="/firefly/command_pose"/>
+  <!-- <remap from="/test_primitive/goal_pose" to="/taro/command/pose"/> -->
   </node>
 
   <!-- <node pkg="planning_ros_utils"                                                                      -->

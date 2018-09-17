@@ -46,7 +46,8 @@ MPLPlannerNode::MPLPlannerNode(const ros::NodeHandle& nodeHandle, const ros::Nod
                                         &MPLPlannerNode::goalPoseCallback, this);
   cloudSubscriber_ = privateNodeHandle_.subscribe("cloud", 1,
                                         &MPLPlannerNode::cloudCallback, this);
-  timer_ = privateNodeHandle_.createTimer(ros::Duration(1), &MPLPlannerNode::timerCallback, this);
+  timer1_ = privateNodeHandle_.createTimer(ros::Duration(0.2), &MPLPlannerNode::timerCallback1, this);
+  timer2_ = privateNodeHandle_.createTimer(ros::Duration(20), &MPLPlannerNode::timerCallback2, this);
 
 }
 
@@ -252,7 +253,9 @@ void MPLPlannerNode::setVoxelMap(planning_ros_msgs::VoxelMap& map) {
       }
     }
     mapUtilPtr_->dilate(ns);
+    mapUtilPtr_->freeRobot_r(robotRadius_);
   }
+
 
   // Publish the dilated map for visualization
   getMap(map);
@@ -280,6 +283,16 @@ void MPLPlannerNode::odometryCallback(const nav_msgs::Odometry& msg) {
 
 void MPLPlannerNode::planTrajectory()
 {
+  if(plannerPtr_->goal_pose_change_){
+    plannerPtr_->replanning_flag_ = true;
+  }
+
+  if(!plannerPtr_->replanning_flag_){
+    if(plannerPtr_->check_traj()){
+      return;
+    }
+  }
+  
   double diff = (goalPosition_ - startPosition_).norm();
   if(diff < goalTolerance_) 
   {
@@ -294,7 +307,19 @@ void MPLPlannerNode::planTrajectory()
       commandTrajectory.points.push_back(tp);
       commandTrajectoryPublisher_.publish(commandTrajectory);
       return;
+  }else{
+    trajectory_msgs::MultiDOFJointTrajectory commandTrajectory;
+    commandTrajectory.header.frame_id = "world";
+    trajectory_msgs::MultiDOFJointTrajectoryPoint tp;
+    geometry_msgs::Transform transform;
+    transform.translation.x = startPosition_.x();
+    transform.translation.y = startPosition_.y();
+    transform.translation.z = startPosition_.z();
+      tp.transforms.push_back(transform);
+      commandTrajectory.points.push_back(tp);
+      commandTrajectoryPublisher_.publish(commandTrajectory);
   }
+
   // Vec3f is Vector3d
   Waypoint3D start;
   start.pos = startPosition_;
@@ -319,10 +344,13 @@ void MPLPlannerNode::planTrajectory()
   bool valid = plannerPtr_->plan(start, goal);
 
   if (!valid) {
+    plannerPtr_->replanning_flag_ = true;
     ROS_WARN("Failed! Takes %f sec for planning, expand [%zu] nodes",
              (ros::Time::now() - t0).toSec(),
              plannerPtr_->getCloseSet().size());
   } else {
+    plannerPtr_->replanning_flag_ = false;
+    plannerPtr_->goal_pose_change_ = false;
     ROS_INFO("Succeed! Takes %f sec for planning, expand [%zu] nodes",
              (ros::Time::now() - t0).toSec(),
              plannerPtr_->getCloseSet().size());
@@ -378,6 +406,9 @@ void MPLPlannerNode::planTrajectory()
 
 void MPLPlannerNode::goalPoseCallback(const geometry_msgs::PoseStamped& message)
 {
+  if(goalPosition_.x() != message.pose.position.x || goalPosition_.y() != message.pose.position.y || goalPosition_.z() != message.pose.position.z){
+    plannerPtr_->goal_pose_change_ = true;
+  }
   goalPosition_.x() = message.pose.position.x;
   goalPosition_.y() = message.pose.position.y;
   goalPosition_.z() = message.pose.position.z;
@@ -395,8 +426,12 @@ void MPLPlannerNode::goalPoseCallback(const geometry_msgs::PoseStamped& message)
   }
 }
 
-void MPLPlannerNode::timerCallback(const ros::TimerEvent&){
+void MPLPlannerNode::timerCallback1(const ros::TimerEvent&){
   planTrajectory();
+}
+
+void MPLPlannerNode::timerCallback2(const ros::TimerEvent&){
+  plannerPtr_->replanning_flag_ = true;
 }
 
 

@@ -1,0 +1,5 @@
+<library path="lib/libmpl_planner_nodelet">
+  <class name="mpl_planner/MPLPlannerNodelet" type="mpl_planner_nodelet::MPLPlannerNodelet" base_class_type="nodelet::Nodelet">
+  <description>MPLPlanner nodelet</description>
+  </class>
+</library>
