@@ -16,6 +16,10 @@ cs_add_executable(mpl_planner_node
   src/MPLPlannerNode.cpp
   src/mpl_planner_node.cpp
 )
+add_executable(pub_marker src/pub_marker.cpp)
+target_link_libraries(pub_marker
+   ${catkin_LIBRARIES}
+)
 target_link_libraries(mpl_planner_node ${MOTION_PRIMITIVE_LIBRARY_LIBRARIES})
 
 cs_install()

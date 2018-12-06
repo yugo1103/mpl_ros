@@ -292,7 +292,7 @@ void MPLPlannerNode::planTrajectory()
       return;
     }
   }
-  
+
   double diff = (goalPosition_ - startPosition_).norm();
   if(diff < goalTolerance_) 
   {
@@ -320,6 +320,17 @@ void MPLPlannerNode::planTrajectory()
       commandTrajectoryPublisher_.publish(commandTrajectory);
   }
 
+
+  robotRadius_ = robotRadius_ * 1.5;
+  Vec3f ori = startPosition_ - Vec3f(voxelRangeX_, voxelRangeY_, voxelRangeZ_) / 2;
+  Vec3f dim(voxelRangeX_, voxelRangeY_, voxelRangeZ_);
+  voxelGridPtr_->allocate(dim, ori);
+  planning_ros_msgs::VoxelMap map = voxelGridPtr_->getMap();
+  setVoxelMap(map);
+  map.header.frame_id = "world";
+  voxelMapPublisher_.publish(map);
+
+
   // Vec3f is Vector3d
   Waypoint3D start;
   start.pos = startPosition_;
@@ -342,6 +353,7 @@ void MPLPlannerNode::planTrajectory()
   // Planning thread!
   ros::Time t0 = ros::Time::now();
   bool valid = plannerPtr_->plan(start, goal);
+  robotRadius_ = robotRadius_ / 1.5;
 
   if (!valid) {
     plannerPtr_->replanning_flag_ = true;

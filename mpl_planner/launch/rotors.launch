@@ -50,4 +50,8 @@
   <!--   <param name="topic" value="command"/>                                                             -->
   <!-- </node>                                                                                             -->
 
+  <node pkg="mpl_planner" name="pub_marker" type="pub_marker" output="screen">
+    <remap from="/goal_pose" to="/firefly/command_pose"/>
+  </node>
+
 </launch>
