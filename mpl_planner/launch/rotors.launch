@@ -14,26 +14,50 @@
     <param name="topic" value="/voxel_map"/>
     <!-- Set start and goal -->
     <!-- Set dynamic constraints -->
-    <param name="robot_radius" value="0.4"/>
+    <param name="robot_radius" value="0.2"/>
     <param name="voxel_resolution" value="0.2"/>
     <param name="voxel_range_x" value="15.0"/>
     <param name="voxel_range_y" value="15.0"/>
     <param name="voxel_range_z" value="5.0"/>
     <param name="vel_max" value="1.0"/>
-    <param name="acc_max" value="1.0"/>
-    <param name="jrk_max" value="-1.0"/>
-    <param name="yaw_max" value="0.5"/>
+    <param name="acc_max" value="0.0"/>
+    <param name="jrk_max" value="0.0"/>
+    <param name="yaw_max" value="0.0"/>
     <param name="primitive_u" value="0.5"/>
     <param name="primitive_u_yaw" value="0.5"/>
     <param name="primitive_u_num" value="1"/>
     <param name="dt" value="1.0"/>
     <param name="ndt" value="10"/>
     <param name="use_3d" value="true"/>
-    <param name="use_yaw" value="false"/>
     <param name="planner_verbose" value="true"/>
     <param name="number_of_points" value="300"/>
     <param name="replanning_span" value="5"/>
     <param name="goal_tolerance" value="0.5"/>
+
+    <param name="waypoints_num" value="5" type="int"/>
+
+    <param name="waypoints_x_1" value="0.0" type="double"/>
+    <param name="waypoints_y_1" value="4.0" type="double"/>
+    <param name="waypoints_z_1" value="1.0" type="double"/>
+
+    <param name="waypoints_x_2" value="2.0" type="double"/>
+    <param name="waypoints_y_2" value="3.0" type="double"/>
+    <param name="waypoints_z_2" value="1.0" type="double"/>
+
+    <param name="waypoints_x_3" value="7.0" type="double"/>
+    <param name="waypoints_y_3" value="1.0" type="double"/>
+    <param name="waypoints_z_3" value="1.0" type="double"/>
+
+    <param name="waypoints_x_4" value="5.0" type="double"/>
+    <param name="waypoints_y_4" value="5.0" type="double"/>
+    <param name="waypoints_z_4" value="1.0" type="double"/>
+
+    <param name="waypoints_x_5" value="2.0" type="double"/>
+    <param name="waypoints_y_5" value="4.0" type="double"/>
+    <param name="waypoints_z_5" value="1.0" type="double"/>
+
+
+
   <remap from="/test_primitive/cloud" to="/octomap_point_cloud_centers"/> 
   <remap from="/test_primitive/odometry" to="/firefly/ground_truth/odometry"/> 
   <!-- <remap from="/test_primitive/odometry" to="/msf_core/odometry"/> -->
@@ -51,6 +75,7 @@
   <!-- </node>                                                                                             -->
 
   <node pkg="mpl_planner" name="pub_marker" type="pub_marker" output="screen">
+    <remap from="/start_pose" to="/firefly/ground_truth/odometry"/>
     <remap from="/goal_pose" to="/firefly/command_pose"/>
   </node>
 

@@ -33,12 +33,10 @@
 
 #include <interactive_markers/interactive_marker_server.h>
 #include <geometry_msgs/PoseStamped.h>
-#include <nav_msgs/Odometry.h>
 #include <std_srvs/Empty.h>
 
 
-nav_msgs::Odometry start_pos_;
-geometry_msgs::PoseStamped goal_pos_;
+geometry_msgs::PoseStamped marker_pos_;
 
 class MarkerNode
 {
@@ -52,29 +50,25 @@ protected:
 class Marker : MarkerNode
 {
 public:
-    void startFeedback(const visualization_msgs::InteractiveMarkerFeedbackConstPtr &feedback );
-    void goalFeedback(const visualization_msgs::InteractiveMarkerFeedbackConstPtr &feedback );
-    bool start_serviceCallback(std_srvs::Empty::Request & /*request*/,std_srvs::Empty::Response & /*response*/);
-    bool goal_serviceCallback(std_srvs::Empty::Request & /*request*/,std_srvs::Empty::Response & /*response*/);
+    void processFeedback(const visualization_msgs::InteractiveMarkerFeedbackConstPtr &feedback );
+    bool serviceCallback(std_srvs::Empty::Request & /*request*/,std_srvs::Empty::Response & /*response*/);
+
  
     Marker(int argc, char **argv, const char *node_name) : MarkerNode(argc, argv, node_name)
     {
-        start_pos_pub_ = nh.advertise<nav_msgs::Odometry>("start_pose", 10);
-        goal_pos_pub_ = nh.advertise<geometry_msgs::PoseStamped>("goal_pose", 10);
-        ros::ServiceServer start_service = nh.advertiseService("pub_start_pose", &Marker::start_serviceCallback, this);
-        ros::ServiceServer goal_service = nh.advertiseService("pub_goal_pose", &Marker::goal_serviceCallback, this);
+        marker_pos_pub_ = nh.advertise<geometry_msgs::PoseStamped>("goal_pose", 10);
+        ros::ServiceServer service = nh.advertiseService("pub_goal_pose", &Marker::serviceCallback, this);
         
 
               // create an interactive marker server on the topic namespace simple_marker
-        interactive_markers::InteractiveMarkerServer start_server("start_marker");
-        interactive_markers::InteractiveMarkerServer goal_server("goal_marker");
+        interactive_markers::InteractiveMarkerServer server("simple_marker");
 
         // create an interactive marker for our server
         visualization_msgs::InteractiveMarker int_marker;
         int_marker.header.frame_id = "world";
         int_marker.header.stamp=ros::Time::now();
-        int_marker.name = "start_marker";
-        int_marker.description = "start_pose";
+        int_marker.name = "goal_marker";
+        int_marker.description = "goal_pose";
 
         // create a grey box marker
         visualization_msgs::Marker box_marker;
@@ -82,9 +76,9 @@ public:
         box_marker.scale.x = 0.3;
         box_marker.scale.y = 0.3;
         box_marker.scale.z = 0.3;
-        box_marker.color.r = 0.0;
-        box_marker.color.g = 1.0;
-        box_marker.color.b = 0.0;
+        box_marker.color.r = 0.5;
+        box_marker.color.g = 0.5;
+        box_marker.color.b = 0.5;
         box_marker.color.a = 1.0;
 
         // create a non-interactive control which contains the box
@@ -142,34 +136,11 @@ public:
 
         // add the interactive marker to our collection &
         // tell the server to call processFeedback() when feedback arrives for it
-        start_server.insert(int_marker, boost::bind(&Marker::startFeedback, this, _1));
-
-
-
-
-        int_marker.name = "goal_marker";
-        int_marker.description = "goal_pose";
-
-
-        box_marker.color.r = 1.0;
-        box_marker.color.g = 0.0;
-        box_marker.color.b = 0.0;
-
-        box_control.markers.push_back( box_marker );
-
-        // add the control to the interactive marker
-        int_marker.controls.push_back( box_control );
-
-
-        goal_server.insert(int_marker, boost::bind(&Marker::goalFeedback, this, _1));
-
-
-
+        server.insert(int_marker, boost::bind(&Marker::processFeedback, this, _1));
 
 
         // 'commit' changes and send to all clients
-        start_server.applyChanges();
-        goal_server.applyChanges();
+        server.applyChanges();
 
         // start the ROS main loop
         ros::spin();
@@ -178,37 +149,22 @@ public:
     }
 private:
     ros::NodeHandle nh;
-    ros::Publisher start_pos_pub_;
-    ros::Publisher goal_pos_pub_;
+    ros::Publisher marker_pos_pub_;
 };
 
 
-bool Marker::start_serviceCallback(std_srvs::Empty::Request & /*request*/,std_srvs::Empty::Response & /*response*/){
-  start_pos_pub_.publish(start_pos_);
-  ROS_INFO_STREAM("Recive Request!");       
-  return true;
-}
-
-bool Marker::goal_serviceCallback(std_srvs::Empty::Request & /*request*/,std_srvs::Empty::Response & /*response*/){
-  goal_pos_pub_.publish(goal_pos_);
+bool Marker::serviceCallback(std_srvs::Empty::Request & /*request*/,std_srvs::Empty::Response & /*response*/){
+  marker_pos_pub_.publish(marker_pos_);
   ROS_INFO_STREAM("Recive Request!");       
   return true;
 }
 
 
-void Marker::startFeedback(
+void Marker::processFeedback(
     const visualization_msgs::InteractiveMarkerFeedbackConstPtr &feedback )
 {  
-  start_pos_.header.frame_id = "world";
-  start_pos_.pose.pose = feedback->pose; 
-}
-
-
-void Marker::goalFeedback(
-    const visualization_msgs::InteractiveMarkerFeedbackConstPtr &feedback )
-{  
-  goal_pos_.header.frame_id = "world";
-  goal_pos_.pose = feedback->pose; 
+  marker_pos_.header.frame_id = "world";
+  marker_pos_.pose = feedback->pose; 
 }
 
 

@@ -14,6 +14,8 @@
 #include <visualization_msgs/MarkerArray.h>
 #include <mpl_traj_solver/traj_solver.h>
 #include <planning_ros_msgs/Trajectory.h>
+#include "std_msgs/String.h"
+
 
 #include <random>
 
@@ -29,6 +31,7 @@ MPLPlannerNode::MPLPlannerNode(const ros::NodeHandle& nodeHandle, const ros::Nod
       plannerPtr_(new MPL::VoxelMapPlanner(false))
 {
   readParameters();
+  goalPosition_ = waypoints_[0];
   setupMPLPlanner();
   ROS_INFO("Finished mpl setup");
   trajectoryPublisher_ = privateNodeHandle_.advertise<visualization_msgs::Marker>("line_marker", 0);
@@ -114,6 +117,42 @@ bool MPLPlannerNode::readParameters()
   if (!privateNodeHandle_.param<double>("goal_tolerance", goalTolerance_, 0.2)) {
     ROS_ERROR("Could not load goal_tolerance.");
   }
+
+  Eigen::Vector3d wp;
+
+  if (!privateNodeHandle_.param<double>("waypoints_x_" + std::to_string(1), wp(0), 0)) {
+    ROS_ERROR("Could not load waypoints_x.");
+  }
+  if (!privateNodeHandle_.param<double>("waypoints_y_" + std::to_string(1), wp(1), 0)) {
+    ROS_ERROR("Could not load waypoints_y.");
+  }
+  if (!privateNodeHandle_.param<double>("waypoints_z_" + std::to_string(1), wp(2), 0)) {
+    ROS_ERROR("Could not load waypoints_z.");
+  }
+
+  waypoints_.push_back(wp);
+
+  if (!privateNodeHandle_.param<int>("waypoints_num", waypoints_num_, 0)) {
+    ROS_ERROR("Could not load waypoints_num");
+  }
+
+  for(int i = 1; i < waypoints_num_; ++i)
+  {
+
+    if (!privateNodeHandle_.param<double>("waypoints_x_" + std::to_string(i + 1), wp(0), 0)) {
+    ROS_ERROR("Could not load waypoints_x_%d.",i);
+  }
+  if (!privateNodeHandle_.param<double>("waypoints_y_" + std::to_string(i + 1), wp(1), 0)) {
+    ROS_ERROR("Could not load waypoints_y_%d.",i);
+  }
+  if (!privateNodeHandle_.param<double>("waypoints_z_" + std::to_string(i + 1), wp(2), 0)) {
+    ROS_ERROR("Could not load waypoints_z_%d.",i);
+  }   
+
+    waypoints_.push_back(wp);
+  }
+
+
 }
 
 void MPLPlannerNode::setupMPLPlanner() {
@@ -283,42 +322,51 @@ void MPLPlannerNode::odometryCallback(const nav_msgs::Odometry& msg) {
 
 void MPLPlannerNode::planTrajectory()
 {
-  if(plannerPtr_->goal_pose_change_){
-    plannerPtr_->replanning_flag_ = true;
-  }
+	double diff = (goalPosition_ - startPosition_).norm();
+  	if(diff < goalTolerance_ * 2) 
+  	{
+    	if(waypoints_counter_ < (waypoints_num_ - 1)){
+    		waypoints_counter_++;
+	      	goalPosition_ = waypoints_[waypoints_counter_];
+	      	plannerPtr_->replanning_flag_ = true;
+	      	planTrajectory();
+	      	return;
+    	}
+	    trajectory_msgs::MultiDOFJointTrajectory commandTrajectory;
+	    commandTrajectory.header.frame_id = "world";
+	    trajectory_msgs::MultiDOFJointTrajectoryPoint tp;
+	    geometry_msgs::Transform transform;
+	    transform.translation.x = goalPosition_.x();
+	    transform.translation.y = goalPosition_.y();
+	    transform.translation.z = goalPosition_.z();
+	    tp.transforms.push_back(transform);
+	    commandTrajectory.points.push_back(tp);
+	    commandTrajectoryPublisher_.publish(commandTrajectory);
+	    return;
+	}
 
-  if(!plannerPtr_->replanning_flag_){
-    if(plannerPtr_->check_traj()){
-      return;
-    }
-  }
+	if(plannerPtr_->goal_pose_change_){
+		plannerPtr_->replanning_flag_ = true;
+	}
 
-  double diff = (goalPosition_ - startPosition_).norm();
-  if(diff < goalTolerance_) 
-  {
-    trajectory_msgs::MultiDOFJointTrajectory commandTrajectory;
-    commandTrajectory.header.frame_id = "world";
-    trajectory_msgs::MultiDOFJointTrajectoryPoint tp;
-    geometry_msgs::Transform transform;
-    transform.translation.x = goalPosition_.x();
-    transform.translation.y = goalPosition_.y();
-    transform.translation.z = goalPosition_.z();
-      tp.transforms.push_back(transform);
-      commandTrajectory.points.push_back(tp);
-      commandTrajectoryPublisher_.publish(commandTrajectory);
-      return;
-  }else{
-    trajectory_msgs::MultiDOFJointTrajectory commandTrajectory;
-    commandTrajectory.header.frame_id = "world";
-    trajectory_msgs::MultiDOFJointTrajectoryPoint tp;
-    geometry_msgs::Transform transform;
-    transform.translation.x = startPosition_.x();
-    transform.translation.y = startPosition_.y();
-    transform.translation.z = startPosition_.z();
-      tp.transforms.push_back(transform);
-      commandTrajectory.points.push_back(tp);
-      commandTrajectoryPublisher_.publish(commandTrajectory);
-  }
+	if(!plannerPtr_->replanning_flag_){
+		if(plannerPtr_->check_traj()){
+			return;
+	 	}
+	}
+
+
+	trajectory_msgs::MultiDOFJointTrajectory commandTrajectory;
+	commandTrajectory.header.frame_id = "world";
+	trajectory_msgs::MultiDOFJointTrajectoryPoint tp;
+	geometry_msgs::Transform transform;
+	transform.translation.x = startPosition_.x();
+	transform.translation.y = startPosition_.y();
+	transform.translation.z = startPosition_.z();
+	tp.transforms.push_back(transform);
+	commandTrajectory.points.push_back(tp);
+	commandTrajectoryPublisher_.publish(commandTrajectory);
+  
 
 
   robotRadius_ = robotRadius_ * 1.5;
@@ -339,7 +387,7 @@ void MPLPlannerNode::planTrajectory()
   start.jrk = Vec3f(0, 0, 0);
   start.yaw = currentYaw_;
   start.use_pos = true;
-  start.use_vel = true;
+  start.use_vel = false;
   start.use_acc = false;
   start.use_jrk = false;
   start.use_yaw = useYaw_; // if true, yaw is also propogated
@@ -406,6 +454,13 @@ void MPLPlannerNode::planTrajectory()
     trajectory_msgs::MultiDOFJointTrajectory commandTrajectory;
     commandTrajectory = toMultiDOFJointTrajectoryMsg(traj, numberOfPoints_);
     commandTrajectory.header.frame_id = "world";
+
+    for(int i = 0; i < numberOfPoints_ - 1; i++){
+      geometry_msgs::Quaternion quat_Msg;
+      quaternionTFToMsg(tf::createQuaternionFromRPY(0, 0, atan2((commandTrajectory.points[i + 1].transforms[0].translation.y - commandTrajectory.points[i].transforms[0].translation.y), (commandTrajectory.points[i + 1].transforms[0].translation.x - commandTrajectory.points[i].transforms[0].translation.x))), quat_Msg);
+      commandTrajectory.points[i].transforms[0].rotation = quat_Msg;
+    }
+
     commandTrajectoryPublisher_.publish(commandTrajectory);
   }
 

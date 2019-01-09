@@ -19,6 +19,7 @@
 #include <planning_ros_utils/voxel_grid.h>
 #include <topic_tools/shape_shifter.h>
 #include <sensor_msgs/point_cloud_conversion.h>
+#include <vector>
 
 using namespace MPL;
 
@@ -67,6 +68,10 @@ class MPLPlannerNode
   Eigen::Vector3d startPosition_;
   Eigen::Vector3d startVelocity_;
   Eigen::Vector3d goalPosition_;
+  std::vector<Eigen::Vector3d> waypoints_;
+  int waypoints_counter_ = 0;
+  int waypoints_num_;
+
   double currentYaw_;
   double goalYaw_;
 
