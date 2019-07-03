@@ -95,7 +95,7 @@ class MPLPlannerNode
   double dt_;
   int ndt_;
   double goalTolerance_;
-  int replanning_span_;
+  double replanning_span_;
   int numberOfPoints_;
 
   //! ROS node handle.

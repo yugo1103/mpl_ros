@@ -50,7 +50,7 @@ MPLPlannerNode::MPLPlannerNode(const ros::NodeHandle& nodeHandle, const ros::Nod
   cloudSubscriber_ = privateNodeHandle_.subscribe("cloud", 1,
                                         &MPLPlannerNode::cloudCallback, this);
   timer1_ = privateNodeHandle_.createTimer(ros::Duration(0.2), &MPLPlannerNode::timerCallback1, this);
-  timer2_ = privateNodeHandle_.createTimer(ros::Duration(20), &MPLPlannerNode::timerCallback2, this);
+  timer2_ = privateNodeHandle_.createTimer(ros::Duration(replanning_span_), &MPLPlannerNode::timerCallback2, this);
 
 }
 
@@ -84,7 +84,7 @@ bool MPLPlannerNode::readParameters()
   if (!privateNodeHandle_.param<bool>("use_3d", use3d_, true)) {
     ROS_ERROR("Could not load use_3d.");
   }
-  if (!privateNodeHandle_.param<bool>("use_yaw", useYaw_, true)) {
+  if (!privateNodeHandle_.param<bool>("use_yaw", useYaw_, false)) {
     ROS_ERROR("Could not load use_yaw.");
   }
   if (!privateNodeHandle_.param<double>("vel_max", velMax_, 2.0)) {
@@ -113,6 +113,9 @@ bool MPLPlannerNode::readParameters()
   }
   if (!privateNodeHandle_.param<int>("ndt", ndt_, 10)) {
     ROS_ERROR("Could not load ndt.");
+  }
+  if (!privateNodeHandle_.param<double>("replanning_span", replanning_span_, 20.0)) {
+    ROS_ERROR("Could not load replanning_span.");
   }
   if (!privateNodeHandle_.param<double>("goal_tolerance", goalTolerance_, 0.2)) {
     ROS_ERROR("Could not load goal_tolerance.");
@@ -329,7 +332,6 @@ void MPLPlannerNode::planTrajectory()
     		waypoints_counter_++;
 	      	goalPosition_ = waypoints_[waypoints_counter_];
 	      	plannerPtr_->replanning_flag_ = true;
-	      	planTrajectory();
 	      	return;
     	}
 	    trajectory_msgs::MultiDOFJointTrajectory commandTrajectory;
@@ -455,11 +457,14 @@ void MPLPlannerNode::planTrajectory()
     commandTrajectory = toMultiDOFJointTrajectoryMsg(traj, numberOfPoints_);
     commandTrajectory.header.frame_id = "world";
 
+    
+    //yaw calculation
     for(int i = 0; i < numberOfPoints_ - 1; i++){
       geometry_msgs::Quaternion quat_Msg;
       quaternionTFToMsg(tf::createQuaternionFromRPY(0, 0, atan2((commandTrajectory.points[i + 1].transforms[0].translation.y - commandTrajectory.points[i].transforms[0].translation.y), (commandTrajectory.points[i + 1].transforms[0].translation.x - commandTrajectory.points[i].transforms[0].translation.x))), quat_Msg);
       commandTrajectory.points[i].transforms[0].rotation = quat_Msg;
     }
+
 
     commandTrajectoryPublisher_.publish(commandTrajectory);
   }

@@ -10,12 +10,11 @@
     name="test_primitive"
     launch-prefix="$(arg prefix)"
     output="screen">
-    <param name="file" value="$(find mpl_test_node)/maps/simple/simple.bag"/>
     <param name="topic" value="/voxel_map"/>
     <!-- Set start and goal -->
     <!-- Set dynamic constraints -->
-    <param name="robot_radius" value="0.2"/>
-    <param name="voxel_resolution" value="0.2"/>
+    <param name="robot_radius" value="0.1"/>
+    <param name="voxel_resolution" value="0.1"/>
     <param name="voxel_range_x" value="15.0"/>
     <param name="voxel_range_y" value="15.0"/>
     <param name="voxel_range_z" value="5.0"/>
@@ -31,32 +30,58 @@
     <param name="use_3d" value="true"/>
     <param name="planner_verbose" value="true"/>
     <param name="number_of_points" value="300"/>
-    <param name="replanning_span" value="5"/>
+    <param name="replanning_span" value="20"/>
     <param name="goal_tolerance" value="0.5"/>
 
-    <param name="waypoints_num" value="5" type="int"/>
+    <param name="waypoints_num" value="1" type="int"/>
 
     <param name="waypoints_x_1" value="0.0" type="double"/>
-    <param name="waypoints_y_1" value="4.0" type="double"/>
+    <param name="waypoints_y_1" value="5.0" type="double"/>
     <param name="waypoints_z_1" value="1.0" type="double"/>
 
-    <param name="waypoints_x_2" value="2.0" type="double"/>
-    <param name="waypoints_y_2" value="3.0" type="double"/>
+    <param name="waypoints_x_2" value="0.0" type="double"/>
+    <param name="waypoints_y_2" value="10.0" type="double"/>
     <param name="waypoints_z_2" value="1.0" type="double"/>
 
-    <param name="waypoints_x_3" value="7.0" type="double"/>
-    <param name="waypoints_y_3" value="1.0" type="double"/>
+    <param name="waypoints_x_3" value="0.0" type="double"/>
+    <param name="waypoints_y_3" value="15.0" type="double"/>
     <param name="waypoints_z_3" value="1.0" type="double"/>
 
-    <param name="waypoints_x_4" value="5.0" type="double"/>
-    <param name="waypoints_y_4" value="5.0" type="double"/>
+    <param name="waypoints_x_4" value="-1.0" type="double"/>
+    <param name="waypoints_y_4" value="18.0" type="double"/>
     <param name="waypoints_z_4" value="1.0" type="double"/>
 
-    <param name="waypoints_x_5" value="2.0" type="double"/>
-    <param name="waypoints_y_5" value="4.0" type="double"/>
+    <param name="waypoints_x_5" value="-4.5" type="double"/>
+    <param name="waypoints_y_5" value="23.0" type="double"/>
     <param name="waypoints_z_5" value="1.0" type="double"/>
 
+    <param name="waypoints_x_6" value="-4.5" type="double"/>
+    <param name="waypoints_y_6" value="28.0" type="double"/>
+    <param name="waypoints_z_6" value="1.0" type="double"/>
 
+    <param name="waypoints_x_7" value="-4.5" type="double"/>
+    <param name="waypoints_y_7" value="32.0" type="double"/>
+    <param name="waypoints_z_7" value="1.0" type="double"/>
+
+    <param name="waypoints_x_8" value="1.0" type="double"/>
+    <param name="waypoints_y_8" value="32.0" type="double"/>
+    <param name="waypoints_z_8" value="1.0" type="double"/>
+
+    <param name="waypoints_x_9" value="7.0" type="double"/>
+    <param name="waypoints_y_9" value="32.0" type="double"/>
+    <param name="waypoints_z_9" value="1.0" type="double"/>
+
+    <param name="waypoints_x_10" value="13.0" type="double"/>
+    <param name="waypoints_y_10" value="32.0" type="double"/>
+    <param name="waypoints_z_10" value="1.0" type="double"/>
+
+    <param name="waypoints_x_11" value="17.0" type="double"/>
+    <param name="waypoints_y_11" value="32.0" type="double"/>
+    <param name="waypoints_z_11" value="1.0" type="double"/>
+
+    <param name="waypoints_x_12" value="18.0" type="double"/>
+    <param name="waypoints_y_12" value="27.0" type="double"/>
+    <param name="waypoints_z_12" value="1.0" type="double"/>
 
   <remap from="/test_primitive/cloud" to="/octomap_point_cloud_centers"/> 
   <remap from="/test_primitive/odometry" to="/firefly/ground_truth/odometry"/> 
