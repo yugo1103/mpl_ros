@@ -44,6 +44,7 @@ class MPLPlannerNode
   bool readParameters();
   void setupMPLPlanner();
   void setMap(const planning_ros_msgs::VoxelMap& msg);
+  void expandVoxelResolution(double expand_size);
   void getMap(planning_ros_msgs::VoxelMap &map);
   void setVoxelMap(planning_ros_msgs::VoxelMap& map);
   void processCloud(const sensor_msgs::PointCloud& cloud);
@@ -52,6 +53,9 @@ class MPLPlannerNode
   // void publishLine(const std::vector<Eigen::Vector4d>& trajectory);
   void goalPoseCallback(const geometry_msgs::PoseStamped& message);
   void odometryCallback(const nav_msgs::Odometry& message);
+  void publishTrajectry(const Trajectory3D& traj);
+  void publishTrajectry(const Eigen::Vector3d& goal_point);
+  void publishTrajectryLine(const Trajectory3D& traj);
   void cloudCallback(const topic_tools::ShapeShifter::ConstPtr &msg);
 
   // void esdfMapCallback(const voxblox_msgs::LayerConstPtr layerMsg);
