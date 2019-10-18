@@ -73,8 +73,7 @@ class MPLPlannerNode
   Eigen::Vector3d startVelocity_;
   Eigen::Vector3d goalPosition_;
   std::vector<Eigen::Vector3d> waypoints_;
-  int waypoints_counter_ = 0;
-  int waypoints_num_;
+  int waypointsNum_;
 
   double currentYaw_;
   double goalYaw_;
@@ -99,7 +98,7 @@ class MPLPlannerNode
   double dt_;
   int ndt_;
   double goalTolerance_;
-  double replanning_span_;
+  double replanningSpan_;
   int numberOfPoints_;
 
   //! ROS node handle.

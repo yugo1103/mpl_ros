@@ -50,7 +50,7 @@ MPLPlannerNode::MPLPlannerNode(const ros::NodeHandle& nodeHandle, const ros::Nod
   cloudSubscriber_ = privateNodeHandle_.subscribe("cloud", 1,
                                         &MPLPlannerNode::cloudCallback, this);
   timer1_ = privateNodeHandle_.createTimer(ros::Duration(0.2), &MPLPlannerNode::timerCallback1, this);
-  timer2_ = privateNodeHandle_.createTimer(ros::Duration(replanning_span_), &MPLPlannerNode::timerCallback2, this);
+  timer2_ = privateNodeHandle_.createTimer(ros::Duration(replanningSpan_), &MPLPlannerNode::timerCallback2, this);
 
 }
 
@@ -114,7 +114,7 @@ bool MPLPlannerNode::readParameters()
   if (!privateNodeHandle_.param<int>("ndt", ndt_, 10)) {
     ROS_ERROR("Could not load ndt.");
   }
-  if (!privateNodeHandle_.param<double>("replanning_span", replanning_span_, 20.0)) {
+  if (!privateNodeHandle_.param<double>("replanning_span", replanningSpan_, 20.0)) {
     ROS_ERROR("Could not load replanning_span.");
   }
   if (!privateNodeHandle_.param<double>("goal_tolerance", goalTolerance_, 0.2)) {
@@ -135,11 +135,11 @@ bool MPLPlannerNode::readParameters()
 
   waypoints_.push_back(wp);
 
-  if (!privateNodeHandle_.param<int>("waypoints_num", waypoints_num_, 0)) {
+  if (!privateNodeHandle_.param<int>("waypoints_num", waypointsNum_, 0)) {
     ROS_ERROR("Could not load waypoints_num");
   }
 
-  for(int i = 1; i < waypoints_num_; ++i)
+  for(int i = 1; i < waypointsNum_; ++i)
   {
 
     if (!privateNodeHandle_.param<double>("waypoints_x_" + std::to_string(i + 1), wp(0), 0)) {
@@ -150,7 +150,7 @@ bool MPLPlannerNode::readParameters()
   }
   if (!privateNodeHandle_.param<double>("waypoints_z_" + std::to_string(i + 1), wp(2), 0)) {
     ROS_ERROR("Could not load waypoints_z_%d.",i);
-  }   
+  }
 
     waypoints_.push_back(wp);
   }
@@ -227,7 +227,9 @@ void MPLPlannerNode::processCloud(const sensor_msgs::PointCloud& cloud) {
   //マップ原点
   Vec3f ori = startPosition_ - Vec3f(voxelRangeX_, voxelRangeY_, voxelRangeZ_) / 2;
   //マップ範囲
+  // Free unknown space and dilate obstacles
   Vec3f dim(voxelRangeX_, voxelRangeY_, voxelRangeZ_);
+  voxelGridPtr_->clear();
   voxelGridPtr_->allocate(dim, ori);
   voxelGridPtr_->addCloud(cloud_to_vec(cloud));
   planning_ros_msgs::VoxelMap map = voxelGridPtr_->getMap();
@@ -311,7 +313,7 @@ void MPLPlannerNode::getMap(planning_ros_msgs::VoxelMap &map) {
 void MPLPlannerNode::setVoxelMap(planning_ros_msgs::VoxelMap& map) {
   setMap(map);
   // Free unknown space and dilate obstacles
-  mapUtilPtr_->freeUnknown();
+  //mapUtilPtr_->freeUnknown();
   // Inflate obstacle using robot radius (>0)
   if(robotRadius_ > 0) {
     vec_Vec3i ns;
@@ -426,21 +428,8 @@ void MPLPlannerNode::planTrajectory()
     //現在地からgoalが十分近い時,経路生成せず直接移動
   	if(diff < goalTolerance_ * 2)
   	{
-    	if(waypoints_counter_ < (waypoints_num_ - 1)){
-    		waypoints_counter_++;
-	      	goalPosition_ = waypoints_[waypoints_counter_];
-	      	plannerPtr_->replanning_flag_ = true;
-	      	return;
-    	}
         publishTrajectry(goalPosition_);
 	    return;
-	}
-
-
-	if(!plannerPtr_->replanning_flag_){
-		if(plannerPtr_->check_traj()){
-			return;
-	 	}
 	}
 
     //経路計算の間その場に留まる
@@ -473,12 +462,12 @@ void MPLPlannerNode::planTrajectory()
   bool valid = plannerPtr_->plan(start, goal);
 
   if (!valid) {
-    plannerPtr_->replanning_flag_ = true;
     ROS_WARN("Failed! Takes %f sec for planning, expand [%zu] nodes",
              (ros::Time::now() - t0).toSec(),
              plannerPtr_->getCloseSet().size());
+    planTrajectory();
+    return;
   } else {
-    plannerPtr_->replanning_flag_ = false;
     ROS_INFO("Succeed! Takes %f sec for planning, expand [%zu] nodes",
              (ros::Time::now() - t0).toSec(),
              plannerPtr_->getCloseSet().size());
@@ -487,22 +476,10 @@ void MPLPlannerNode::planTrajectory()
     publishTrajectry(traj);
   }
 
-  // Publish expanded nodes
-  //sensor_msgs::PointCloud ps = vec_to_cloud(plannerPtr_->getCloseSet());
-  //sensor_msgs::PointCloud ps = vec_to_cloud(planner_ptr->getValidRegion());
-  // ps.header = header;
-  // cloud_pub.publish(ps);
-
 }
 
 void MPLPlannerNode::goalPoseCallback(const geometry_msgs::PoseStamped& message)
 {
-  if(goalPosition_.x() != message.pose.position.x || goalPosition_.y() != message.pose.position.y || goalPosition_.z() != message.pose.position.z){
-    plannerPtr_->replanning_flag_ = true;
-  }
-  goalPosition_.x() = message.pose.position.x;
-  goalPosition_.y() = message.pose.position.y;
-  goalPosition_.z() = message.pose.position.z;
   Eigen::Quaterniond q;
   q.x() = message.pose.orientation.x;
   q.y() = message.pose.orientation.y;
@@ -510,22 +487,26 @@ void MPLPlannerNode::goalPoseCallback(const geometry_msgs::PoseStamped& message)
   q.w() = message.pose.orientation.w;
   auto euler = q.toRotationMatrix().eulerAngles(0, 1, 2);
   goalYaw_ = euler[2];
-  //現在地からgoalが十分近い時,経路生成せず直接移動
-  if ((goalPosition_ - startPosition_).norm() < 0.01) {
-    if (fabs(goalYaw_ - currentYaw_) > 0.1) {
-      commandPosePublisher_.publish(message);
-    }
+  //ゴール座標が変わった時経路再計算
+  if(goalPosition_.x() != message.pose.position.x || goalPosition_.y() != message.pose.position.y || goalPosition_.z() != message.pose.position.z){
+      goalPosition_.x() = message.pose.position.x;
+      goalPosition_.y() = message.pose.position.y;
+      goalPosition_.z() = message.pose.position.z;
+      planTrajectory();
   }
 }
 
-//定期的に経路再形成
+//経路上に障害物がないか定期的に確認
+//処理に時間がかからないようならcloudCallbackに移行
 void MPLPlannerNode::timerCallback1(const ros::TimerEvent&){
-  planTrajectory();
+  if(!plannerPtr_->check_traj()){
+      planTrajectory();
+  }
 }
 
-//定期的に経路
+//定期的に経路再計算
 void MPLPlannerNode::timerCallback2(const ros::TimerEvent&){
-  plannerPtr_->replanning_flag_ = true;
+    planTrajectory();
 }
 
 

@@ -13,7 +13,7 @@
     <param name="topic" value="/voxel_map"/>
     <!-- Set start and goal -->
     <!-- Set dynamic constraints -->
-    <param name="robot_radius" value="0.1"/>
+    <param name="robot_radius" value="0.5"/>
     <param name="voxel_resolution" value="0.1"/>
     <param name="voxel_range_x" value="15.0"/>
     <param name="voxel_range_y" value="15.0"/>
@@ -83,21 +83,10 @@
     <param name="waypoints_y_12" value="27.0" type="double"/>
     <param name="waypoints_z_12" value="1.0" type="double"/>
 
-  <remap from="/test_primitive/cloud" to="/octomap_point_cloud_centers"/> 
-  <remap from="/test_primitive/odometry" to="/firefly/ground_truth/odometry"/> 
-  <!-- <remap from="/test_primitive/odometry" to="/msf_core/odometry"/> -->
+  <remap from="/test_primitive/cloud" to="/octomap_point_cloud_centers"/>
+  <remap from="/test_primitive/odometry" to="/firefly/ground_truth/odometry"/>
   <remap from="/test_primitive/goal_pose" to="/firefly/command_pose"/>
-  <!-- <remap from="/test_primitive/goal_pose" to="/taro/command/pose"/> -->
   </node>
-
-  <!-- <node pkg="planning_ros_utils"                                                                      -->
-  <!--   name="trajectory_extractor"                                                                       -->
-  <!--   type="trajectory_extractor_node"                                                                  -->
-  <!--   output="screen">                                                                                  -->
-  <!--   <remap from="~trajectory" to="test_primitive/trajectory_refined"/>                                -->
-  <!--   <param name="file" value="$(find mpl_test_node)/launch/map_planner_node/trajectory_command.bag"/> -->
-  <!--   <param name="topic" value="command"/>                                                             -->
-  <!-- </node>                                                                                             -->
 
   <node pkg="mpl_planner" name="pub_marker" type="pub_marker" output="screen">
     <remap from="/start_pose" to="/firefly/ground_truth/odometry"/>
