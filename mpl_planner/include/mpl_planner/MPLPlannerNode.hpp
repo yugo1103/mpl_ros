@@ -100,6 +100,7 @@ class MPLPlannerNode
   double goalTolerance_;
   double replanningSpan_;
   int numberOfPoints_;
+  bool is_goal_ = false;
 
   //! ROS node handle.
   ros::NodeHandle nodeHandle_;

@@ -49,6 +49,9 @@ MPLPlannerNode::MPLPlannerNode(const ros::NodeHandle& nodeHandle, const ros::Nod
                                         &MPLPlannerNode::goalPoseCallback, this);
   cloudSubscriber_ = privateNodeHandle_.subscribe("cloud", 1,
                                         &MPLPlannerNode::cloudCallback, this);
+
+
+  planTrajectory();
   timer1_ = privateNodeHandle_.createTimer(ros::Duration(0.2), &MPLPlannerNode::timerCallback1, this);
   timer2_ = privateNodeHandle_.createTimer(ros::Duration(replanningSpan_), &MPLPlannerNode::timerCallback2, this);
 
@@ -465,7 +468,7 @@ void MPLPlannerNode::planTrajectory()
     ROS_WARN("Failed! Takes %f sec for planning, expand [%zu] nodes",
              (ros::Time::now() - t0).toSec(),
              plannerPtr_->getCloseSet().size());
-    planTrajectory();
+    is_goal_ = false;
     return;
   } else {
     ROS_INFO("Succeed! Takes %f sec for planning, expand [%zu] nodes",
@@ -474,6 +477,7 @@ void MPLPlannerNode::planTrajectory()
 
     auto traj = plannerPtr_->getTraj();
     publishTrajectry(traj);
+    is_goal_ = true;
   }
 
 }
@@ -499,7 +503,7 @@ void MPLPlannerNode::goalPoseCallback(const geometry_msgs::PoseStamped& message)
 //経路上に障害物がないか定期的に確認
 //処理に時間がかからないようならcloudCallbackに移行
 void MPLPlannerNode::timerCallback1(const ros::TimerEvent&){
-  if(!plannerPtr_->check_traj()){
+  if(!plannerPtr_->check_traj() || !is_goal_){
       planTrajectory();
   }
 }

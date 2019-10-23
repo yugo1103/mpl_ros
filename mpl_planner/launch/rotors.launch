@@ -26,7 +26,7 @@
     <param name="primitive_u_yaw" value="0.5"/>
     <param name="primitive_u_num" value="1"/>
     <param name="dt" value="1.0"/>
-    <param name="ndt" value="10"/>
+    <param name="ndt" value="1000"/>
     <param name="use_3d" value="true"/>
     <param name="planner_verbose" value="true"/>
     <param name="number_of_points" value="300"/>
