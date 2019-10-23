@@ -14,6 +14,8 @@
 #include <visualization_msgs/MarkerArray.h>
 #include <mpl_traj_solver/traj_solver.h>
 #include <planning_ros_msgs/Trajectory.h>
+#include "std_msgs/String.h"
+
 
 #include <random>
 
@@ -29,6 +31,7 @@ MPLPlannerNode::MPLPlannerNode(const ros::NodeHandle& nodeHandle, const ros::Nod
       plannerPtr_(new MPL::VoxelMapPlanner(false))
 {
   readParameters();
+  goalPosition_ = waypoints_[0];
   setupMPLPlanner();
   ROS_INFO("Finished mpl setup");
   trajectoryPublisher_ = privateNodeHandle_.advertise<visualization_msgs::Marker>("line_marker", 0);
@@ -47,7 +50,7 @@ MPLPlannerNode::MPLPlannerNode(const ros::NodeHandle& nodeHandle, const ros::Nod
   cloudSubscriber_ = privateNodeHandle_.subscribe("cloud", 1,
                                         &MPLPlannerNode::cloudCallback, this);
   timer1_ = privateNodeHandle_.createTimer(ros::Duration(0.2), &MPLPlannerNode::timerCallback1, this);
-  timer2_ = privateNodeHandle_.createTimer(ros::Duration(20), &MPLPlannerNode::timerCallback2, this);
+  timer2_ = privateNodeHandle_.createTimer(ros::Duration(replanningSpan_), &MPLPlannerNode::timerCallback2, this);
 
 }
 
@@ -81,7 +84,7 @@ bool MPLPlannerNode::readParameters()
   if (!privateNodeHandle_.param<bool>("use_3d", use3d_, true)) {
     ROS_ERROR("Could not load use_3d.");
   }
-  if (!privateNodeHandle_.param<bool>("use_yaw", useYaw_, true)) {
+  if (!privateNodeHandle_.param<bool>("use_yaw", useYaw_, false)) {
     ROS_ERROR("Could not load use_yaw.");
   }
   if (!privateNodeHandle_.param<double>("vel_max", velMax_, 2.0)) {
@@ -111,9 +114,48 @@ bool MPLPlannerNode::readParameters()
   if (!privateNodeHandle_.param<int>("ndt", ndt_, 10)) {
     ROS_ERROR("Could not load ndt.");
   }
+  if (!privateNodeHandle_.param<double>("replanning_span", replanningSpan_, 20.0)) {
+    ROS_ERROR("Could not load replanning_span.");
+  }
   if (!privateNodeHandle_.param<double>("goal_tolerance", goalTolerance_, 0.2)) {
     ROS_ERROR("Could not load goal_tolerance.");
   }
+
+  Eigen::Vector3d wp;
+
+  if (!privateNodeHandle_.param<double>("waypoints_x_" + std::to_string(1), wp(0), 0)) {
+    ROS_ERROR("Could not load waypoints_x.");
+  }
+  if (!privateNodeHandle_.param<double>("waypoints_y_" + std::to_string(1), wp(1), 0)) {
+    ROS_ERROR("Could not load waypoints_y.");
+  }
+  if (!privateNodeHandle_.param<double>("waypoints_z_" + std::to_string(1), wp(2), 0)) {
+    ROS_ERROR("Could not load waypoints_z.");
+  }
+
+  waypoints_.push_back(wp);
+
+  if (!privateNodeHandle_.param<int>("waypoints_num", waypointsNum_, 0)) {
+    ROS_ERROR("Could not load waypoints_num");
+  }
+
+  for(int i = 1; i < waypointsNum_; ++i)
+  {
+
+    if (!privateNodeHandle_.param<double>("waypoints_x_" + std::to_string(i + 1), wp(0), 0)) {
+    ROS_ERROR("Could not load waypoints_x_%d.",i);
+  }
+  if (!privateNodeHandle_.param<double>("waypoints_y_" + std::to_string(i + 1), wp(1), 0)) {
+    ROS_ERROR("Could not load waypoints_y_%d.",i);
+  }
+  if (!privateNodeHandle_.param<double>("waypoints_z_" + std::to_string(i + 1), wp(2), 0)) {
+    ROS_ERROR("Could not load waypoints_z_%d.",i);
+  }
+
+    waypoints_.push_back(wp);
+  }
+
+
 }
 
 void MPLPlannerNode::setupMPLPlanner() {
@@ -180,10 +222,14 @@ void MPLPlannerNode::setupMPLPlanner() {
   voxelGridPtr_.reset(new VoxelGrid(origin, dim, voxelResolution_));
 }
 
-
+//PointCloudからマップを作成しpublish
 void MPLPlannerNode::processCloud(const sensor_msgs::PointCloud& cloud) {
+  //マップ原点
   Vec3f ori = startPosition_ - Vec3f(voxelRangeX_, voxelRangeY_, voxelRangeZ_) / 2;
+  //マップ範囲
+  // Free unknown space and dilate obstacles
   Vec3f dim(voxelRangeX_, voxelRangeY_, voxelRangeZ_);
+  voxelGridPtr_->clear();
   voxelGridPtr_->allocate(dim, ori);
   voxelGridPtr_->addCloud(cloud_to_vec(cloud));
   planning_ros_msgs::VoxelMap map = voxelGridPtr_->getMap();
@@ -198,6 +244,7 @@ void MPLPlannerNode::cloudCallback(const topic_tools::ShapeShifter::ConstPtr &ms
     auto cloud_ptr = msg->instantiate<sensor_msgs::PointCloud>();
     processCloud(*cloud_ptr);
   }
+  //入力がPointCloud2のときPointCloudへ変換
   else if(msg->getDataType() == "sensor_msgs/PointCloud2") {
     auto cloud2_ptr = msg->instantiate<sensor_msgs::PointCloud2>();
     sensor_msgs::PointCloud cloud;
@@ -210,12 +257,40 @@ void MPLPlannerNode::cloudCallback(const topic_tools::ShapeShifter::ConstPtr &ms
 
 void MPLPlannerNode::setMap(const planning_ros_msgs::VoxelMap& msg) {
   // Vec3f ori(msg.origin.x, msg.origin.y, msg.origin.z);
+  //マップ原点
   Vec3f ori = startPosition_ - Vec3f(voxelRangeX_, voxelRangeY_, voxelRangeZ_) / 2;
+  //マップ範囲
   Vec3i dim(msg.dim.x, msg.dim.y, msg.dim.z);
   decimal_t res = msg.resolution;
   std::vector<signed char> map = msg.data;
 
   mapUtilPtr_->setMap(ori, dim, map, res);
+}
+
+
+void MPLPlannerNode::expandVoxelResolution(const double expand_size) {
+  planning_ros_msgs::VoxelMap map = voxelGridPtr_->getMap();
+  setMap(map);
+  // Inflate obstacle using robot radius (>0)
+  if(expand_size > 0) {
+    vec_Vec3i ns;
+    int rn = std::ceil(expand_size / mapUtilPtr_->getRes());
+    for(int nx = -rn; nx <= rn; nx++) {
+      for(int ny = -rn; ny <= rn; ny++) {
+        if(nx == 0 && ny == 0)
+          continue;
+        if(std::hypot(nx, ny) > rn)
+          continue;
+        ns.push_back(Vec3i(nx, ny, 0));
+      }
+    }
+    mapUtilPtr_->dilate(ns);
+    mapUtilPtr_->freeRobot_r(expand_size);
+  }
+
+  getMap(map);
+  map.header.frame_id = "world";
+  voxelMapPublisher_.publish(map);
 }
 
 void MPLPlannerNode::getMap(planning_ros_msgs::VoxelMap &map) {
@@ -238,7 +313,7 @@ void MPLPlannerNode::getMap(planning_ros_msgs::VoxelMap &map) {
 void MPLPlannerNode::setVoxelMap(planning_ros_msgs::VoxelMap& map) {
   setMap(map);
   // Free unknown space and dilate obstacles
-  mapUtilPtr_->freeUnknown();
+  //mapUtilPtr_->freeUnknown();
   // Inflate obstacle using robot radius (>0)
   if(robotRadius_ > 0) {
     vec_Vec3i ns;
@@ -281,88 +356,41 @@ void MPLPlannerNode::odometryCallback(const nav_msgs::Odometry& msg) {
   // ROS_INFO_STREAM("got odometry" << msg);
 }
 
-void MPLPlannerNode::planTrajectory()
-{
-  if(plannerPtr_->goal_pose_change_){
-    plannerPtr_->replanning_flag_ = true;
-  }
+void MPLPlannerNode::publishTrajectry(const Trajectory3D& traj) {
+    trajectory_msgs::MultiDOFJointTrajectory commandTrajectory;
+    commandTrajectory = toMultiDOFJointTrajectoryMsg(traj, numberOfPoints_);
+    commandTrajectory.header.frame_id = "world";
 
-  if(!plannerPtr_->replanning_flag_){
-    if(plannerPtr_->check_traj()){
-      return;
+    //yaw calculation
+    for(int i = 0; i < numberOfPoints_ - 1; i++){
+      geometry_msgs::Quaternion quat_Msg;
+      quaternionTFToMsg(tf::createQuaternionFromRPY(0, 0, atan2((commandTrajectory.points[i + 1].transforms[0].translation.y - commandTrajectory.points[i].transforms[0].translation.y), (commandTrajectory.points[i + 1].transforms[0].translation.x - commandTrajectory.points[i].transforms[0].translation.x))), quat_Msg);
+      commandTrajectory.points[i].transforms[0].rotation = quat_Msg;
     }
-  }
-  
-  double diff = (goalPosition_ - startPosition_).norm();
-  if(diff < goalTolerance_) 
-  {
-    trajectory_msgs::MultiDOFJointTrajectory commandTrajectory;
-    commandTrajectory.header.frame_id = "world";
-    trajectory_msgs::MultiDOFJointTrajectoryPoint tp;
-    geometry_msgs::Transform transform;
-    transform.translation.x = goalPosition_.x();
-    transform.translation.y = goalPosition_.y();
-    transform.translation.z = goalPosition_.z();
-      tp.transforms.push_back(transform);
-      commandTrajectory.points.push_back(tp);
-      commandTrajectoryPublisher_.publish(commandTrajectory);
-      return;
-  }else{
-    trajectory_msgs::MultiDOFJointTrajectory commandTrajectory;
-    commandTrajectory.header.frame_id = "world";
-    trajectory_msgs::MultiDOFJointTrajectoryPoint tp;
-    geometry_msgs::Transform transform;
-    transform.translation.x = startPosition_.x();
-    transform.translation.y = startPosition_.y();
-    transform.translation.z = startPosition_.z();
-      tp.transforms.push_back(transform);
-      commandTrajectory.points.push_back(tp);
-      commandTrajectoryPublisher_.publish(commandTrajectory);
-  }
 
-  // Vec3f is Vector3d
-  Waypoint3D start;
-  start.pos = startPosition_;
-  start.vel = startVelocity_;
-  start.acc = Vec3f(0, 0, 0);
-  start.jrk = Vec3f(0, 0, 0);
-  start.yaw = currentYaw_;
-  start.use_pos = true;
-  start.use_vel = true;
-  start.use_acc = false;
-  start.use_jrk = false;
-  start.use_yaw = useYaw_; // if true, yaw is also propogated
 
-  Waypoint3D goal(start.control); // initialized with the same control as start
-  goal.pos = goalPosition_;
-  goal.vel = Vec3f(0, 0, 0);
-  goal.acc = Vec3f(0, 0, 0);
-  goal.jrk = Vec3f(0, 0, 0);
+    commandTrajectoryPublisher_.publish(commandTrajectory);
+    publishTrajectryLine(traj);
+}
 
-  // Planning thread!
-  ros::Time t0 = ros::Time::now();
-  bool valid = plannerPtr_->plan(start, goal);
+void MPLPlannerNode::publishTrajectry(const Eigen::Vector3d& goal_point) {
+	trajectory_msgs::MultiDOFJointTrajectory commandTrajectory;
+	commandTrajectory.header.frame_id = "world";
+	trajectory_msgs::MultiDOFJointTrajectoryPoint tp;
+	geometry_msgs::Transform transform;
+	transform.translation.x = goal_point.x();
+	transform.translation.y = goal_point.y();
+	transform.translation.z = goal_point.z();
+	tp.transforms.push_back(transform);
+	commandTrajectory.points.push_back(tp);
+	commandTrajectoryPublisher_.publish(commandTrajectory);
+}
 
-  if (!valid) {
-    plannerPtr_->replanning_flag_ = true;
-    ROS_WARN("Failed! Takes %f sec for planning, expand [%zu] nodes",
-             (ros::Time::now() - t0).toSec(),
-             plannerPtr_->getCloseSet().size());
-  } else {
-    plannerPtr_->replanning_flag_ = false;
-    plannerPtr_->goal_pose_change_ = false;
-    ROS_INFO("Succeed! Takes %f sec for planning, expand [%zu] nodes",
-             (ros::Time::now() - t0).toSec(),
-             plannerPtr_->getCloseSet().size());
-
-    auto traj = plannerPtr_->getTraj();
-
-    // Publish trajectory
+void MPLPlannerNode::publishTrajectryLine(const Trajectory3D& traj) {
+    //経路可視化(rviz用)
     std_msgs::Header header;
     header.frame_id = std::string("map");
     planning_ros_msgs::Trajectory traj_msg = toTrajectoryROSMsg(traj);
-    // traj_msg.header = header;
-    // traj_pub.publish(traj_msg);
 
     printf("Raw traj -- J(VEL): %f, J(ACC): %f, J(JRK): %f, J(SNP): %f, J(YAW): %f, total time: %f\n",
            traj.J(Control::VEL), traj.J(Control::ACC), traj.J(Control::JRK),
@@ -380,38 +408,78 @@ void MPLPlannerNode::planTrajectory()
     TrajSolver3D traj_solver(Control::ACC);
     traj_solver.setWaypoints(waypoints);
     traj_solver.setDts(dts);
-    traj = traj_solver.solve();
+
+    Trajectory3D refined_traj;
+    refined_traj = traj_solver.solve();
 
     // Publish refined trajectory
-    planning_ros_msgs::Trajectory refined_traj_msg = toTrajectoryROSMsg(traj);
+    planning_ros_msgs::Trajectory refined_traj_msg = toTrajectoryROSMsg(refined_traj);
     refined_traj_msg.header.frame_id = "world";
     refinedTrajectoryPublisher.publish(refined_traj_msg);
 
     printf("Refined traj -- J(VEL): %f, J(ACC): %f, J(JRK): %f, J(SNP): %f, J(YAW): %f, total time: %f\n",
-           traj.J(Control::VEL), traj.J(Control::ACC), traj.J(Control::JRK),
-           traj.J(Control::SNP), traj.Jyaw(), traj.getTotalTime());
-    auto refined_points = traj.sample(numberOfPoints_);
-    trajectory_msgs::MultiDOFJointTrajectory commandTrajectory;
-    commandTrajectory = toMultiDOFJointTrajectoryMsg(traj, numberOfPoints_);
-    commandTrajectory.header.frame_id = "world";
-    commandTrajectoryPublisher_.publish(commandTrajectory);
+           refined_traj.J(Control::VEL), refined_traj.J(Control::ACC), refined_traj.J(Control::JRK),
+           refined_traj.J(Control::SNP), refined_traj.Jyaw(), refined_traj.getTotalTime());
+}
+
+void MPLPlannerNode::planTrajectory()
+{
+	double diff = (goalPosition_ - startPosition_).norm();
+    //現在地からgoalが十分近い時,経路生成せず直接移動
+  	if(diff < goalTolerance_ * 2)
+  	{
+        publishTrajectry(goalPosition_);
+	    return;
+	}
+
+    //経路計算の間その場に留まる
+    publishTrajectry(startPosition_);
+
+    //障害物を大きく回避するためvoxel拡大
+    expandVoxelResolution(robotRadius_ * 1.5);
+
+  // Vec3f is Vector3d
+  Waypoint3D start;
+  start.pos = startPosition_;
+  start.vel = startVelocity_;
+  start.acc = Vec3f(0, 0, 0);
+  start.jrk = Vec3f(0, 0, 0);
+  start.yaw = currentYaw_;
+  start.use_pos = true;
+  start.use_vel = false;
+  start.use_acc = false;
+  start.use_jrk = false;
+  start.use_yaw = useYaw_; // if true, yaw is also propogated
+
+  Waypoint3D goal(start.control); // initialized with the same control as start
+  goal.pos = goalPosition_;
+  goal.vel = Vec3f(0, 0, 0);
+  goal.acc = Vec3f(0, 0, 0);
+  goal.jrk = Vec3f(0, 0, 0);
+
+  // Planning thread!
+  ros::Time t0 = ros::Time::now();
+  bool valid = plannerPtr_->plan(start, goal);
+
+  if (!valid) {
+    ROS_WARN("Failed! Takes %f sec for planning, expand [%zu] nodes",
+             (ros::Time::now() - t0).toSec(),
+             plannerPtr_->getCloseSet().size());
+    planTrajectory();
+    return;
+  } else {
+    ROS_INFO("Succeed! Takes %f sec for planning, expand [%zu] nodes",
+             (ros::Time::now() - t0).toSec(),
+             plannerPtr_->getCloseSet().size());
+
+    auto traj = plannerPtr_->getTraj();
+    publishTrajectry(traj);
   }
 
-  // Publish expanded nodes
-  sensor_msgs::PointCloud ps = vec_to_cloud(plannerPtr_->getCloseSet());
-  //sensor_msgs::PointCloud ps = vec_to_cloud(planner_ptr->getValidRegion());
-  // ps.header = header;
-  // cloud_pub.publish(ps);
 }
 
 void MPLPlannerNode::goalPoseCallback(const geometry_msgs::PoseStamped& message)
 {
-  if(goalPosition_.x() != message.pose.position.x || goalPosition_.y() != message.pose.position.y || goalPosition_.z() != message.pose.position.z){
-    plannerPtr_->goal_pose_change_ = true;
-  }
-  goalPosition_.x() = message.pose.position.x;
-  goalPosition_.y() = message.pose.position.y;
-  goalPosition_.z() = message.pose.position.z;
   Eigen::Quaterniond q;
   q.x() = message.pose.orientation.x;
   q.y() = message.pose.orientation.y;
@@ -419,19 +487,26 @@ void MPLPlannerNode::goalPoseCallback(const geometry_msgs::PoseStamped& message)
   q.w() = message.pose.orientation.w;
   auto euler = q.toRotationMatrix().eulerAngles(0, 1, 2);
   goalYaw_ = euler[2];
-  if ((goalPosition_ - startPosition_).norm() < 0.01) {
-    if (fabs(goalYaw_ - currentYaw_) > 0.1) {
-      commandPosePublisher_.publish(message);
-    }
+  //ゴール座標が変わった時経路再計算
+  if(goalPosition_.x() != message.pose.position.x || goalPosition_.y() != message.pose.position.y || goalPosition_.z() != message.pose.position.z){
+      goalPosition_.x() = message.pose.position.x;
+      goalPosition_.y() = message.pose.position.y;
+      goalPosition_.z() = message.pose.position.z;
+      planTrajectory();
   }
 }
 
+//経路上に障害物がないか定期的に確認
+//処理に時間がかからないようならcloudCallbackに移行
 void MPLPlannerNode::timerCallback1(const ros::TimerEvent&){
-  planTrajectory();
+  if(!plannerPtr_->check_traj()){
+      planTrajectory();
+  }
 }
 
+//定期的に経路再計算
 void MPLPlannerNode::timerCallback2(const ros::TimerEvent&){
-  plannerPtr_->replanning_flag_ = true;
+    planTrajectory();
 }
 
 

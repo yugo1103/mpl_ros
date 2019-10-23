@@ -19,6 +19,7 @@
 #include <planning_ros_utils/voxel_grid.h>
 #include <topic_tools/shape_shifter.h>
 #include <sensor_msgs/point_cloud_conversion.h>
+#include <vector>
 
 using namespace MPL;
 
@@ -43,6 +44,7 @@ class MPLPlannerNode
   bool readParameters();
   void setupMPLPlanner();
   void setMap(const planning_ros_msgs::VoxelMap& msg);
+  void expandVoxelResolution(double expand_size);
   void getMap(planning_ros_msgs::VoxelMap &map);
   void setVoxelMap(planning_ros_msgs::VoxelMap& map);
   void processCloud(const sensor_msgs::PointCloud& cloud);
@@ -51,6 +53,9 @@ class MPLPlannerNode
   // void publishLine(const std::vector<Eigen::Vector4d>& trajectory);
   void goalPoseCallback(const geometry_msgs::PoseStamped& message);
   void odometryCallback(const nav_msgs::Odometry& message);
+  void publishTrajectry(const Trajectory3D& traj);
+  void publishTrajectry(const Eigen::Vector3d& goal_point);
+  void publishTrajectryLine(const Trajectory3D& traj);
   void cloudCallback(const topic_tools::ShapeShifter::ConstPtr &msg);
 
   // void esdfMapCallback(const voxblox_msgs::LayerConstPtr layerMsg);
@@ -67,6 +72,9 @@ class MPLPlannerNode
   Eigen::Vector3d startPosition_;
   Eigen::Vector3d startVelocity_;
   Eigen::Vector3d goalPosition_;
+  std::vector<Eigen::Vector3d> waypoints_;
+  int waypointsNum_;
+
   double currentYaw_;
   double goalYaw_;
 
@@ -90,7 +98,7 @@ class MPLPlannerNode
   double dt_;
   int ndt_;
   double goalTolerance_;
-  int replanning_span_;
+  double replanningSpan_;
   int numberOfPoints_;
 
   //! ROS node handle.
